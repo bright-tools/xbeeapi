@@ -57,8 +57,6 @@ int main() {
     /* This example will use the blocking API for simplicity */   
     XBeeApiCmdAtBlocking atIf( &xbeeDevice );
 
-    //pc.printf("XBeeApiSimpleBroadcastExample\r\n");
-
     XBeeDevice::XBeeDeviceReturn_t status;
 
     /* This is the frame we're going to transmit */
