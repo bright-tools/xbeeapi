@@ -39,20 +39,34 @@ const char api_mode2_cmd[] = { 'A', 'T', 'A', 'P', ' ', '2', '\r' };
 /** ASCII command to the XBee to request that it exit command mode */
 const char exit_cmd_mode_cmd[] = { 'A', 'T', 'C', 'N', '\r' };
 
-XBeeDevice::XBeeDevice( PinName p_tx, PinName p_rx, PinName p_rts, PinName p_cts ): m_if( p_tx, p_rx )
+void XBeeDevice::init()                          
 {
-    m_escape = true;
+    m_model = XBeeDevice::XBEEDEVICE_S1;
     m_inAtCmdMode = false;
     m_rxMsgLastWasEsc = false;
+    m_escape = true;
+}
+
+XBeeDevice::XBeeDevice( PinName p_tx, PinName p_rx, PinName p_rts, PinName p_cts ):  m_serialNeedsDelete( true )
+{    
+    init();
     
+    m_if = new Serial( p_tx, p_rx ), 
+
     /* Can only do flow control on devices which support it */
 #if defined ( DEVICE_SERIAL_FC )
     /* TODO: need rts and cts both set? */
-    m_if.set_flow_control( mbed::SerialBase::Flow.RTSCTS, p_rts, p_cts );
+    m_if->set_flow_control( mbed::SerialBase::Flow.RTSCTS, p_rts, p_cts );
 #endif
 
     /* Attach RX call-back to the serial interface */
-    m_if.attach( this, &XBeeDevice::if_rx, Serial::RxIrq); 
+    m_if->attach( this, &XBeeDevice::if_rx, Serial::RxIrq); 
+}
+
+XBeeDevice::XBeeDevice( Serial* p_serialIf ): m_if( p_serialIf ),
+                                              m_serialNeedsDelete( true )
+{    
+    init();
 }
 
 XBeeDevice::~XBeeDevice( void )
@@ -63,14 +77,28 @@ XBeeDevice::~XBeeDevice( void )
          ++it ) {
         (*it)->unregisterCallback();
     }
+    if( m_serialNeedsDelete )
+    {
+        delete( m_if );
+    }
+}
+
+XBeeDevice::XBeeDeviceModel_t XBeeDevice::getXBeeModel() const
+{
+    return m_model;
+}
+     
+void XBeeDevice::setXBeeModel( const XBeeDevice::XBeeDeviceModel_t p_model )
+{
+    m_model = p_model;
 }
 
 void XBeeDevice::if_rx( void )
 {
     /* Keep going while there are bytes to be read */
-    while(m_if.readable()) {
+    while(m_if->readable()) {
         
-        uint8_t c = m_if.getc();
+        uint8_t c = m_if->getc();
         
         /* Sanity check that if we're starting from an empty buffer the byte that we're
            receiving is a frame delimiter */
@@ -235,7 +263,7 @@ void XBeeDevice::SendFrame( XBeeApiFrame* const p_cmd )
     /* Checksum is 0xFF - summation of bytes (excluding delimiter and length) */
     xbeeWrite( (uint8_t)0xFFU - sum );
     
-    fflush( m_if );
+    fflush( *m_if );
 #if defined XBEE_DEBUG_DEVICE_DUMP_MESSAGE_DECODE
     m_if.printf("\r\n");
 #endif
@@ -256,19 +284,19 @@ uint8_t XBeeDevice::xbeeWrite( uint8_t p_byte, bool p_doEscape )
          (p_byte == XBEE_SB_XOFF))) 
     {
 #if defined XBEE_DEBUG_DEVICE_DUMP_MESSAGE_DECODE
-        m_if.printf("%02x ",XBEE_SB_ESCAPE);
-        m_if.printf("%02x ",p_byte ^ 0x20);
+        m_if->printf("%02x ",XBEE_SB_ESCAPE);
+        m_if->printf("%02x ",p_byte ^ 0x20);
 #else
-        m_if.putc(XBEE_SB_ESCAPE);
-        m_if.putc(p_byte ^ 0x20);
+        m_if->putc(XBEE_SB_ESCAPE);
+        m_if->putc(p_byte ^ 0x20);
 #endif
         c_sum += XBEE_SB_ESCAPE;
         c_sum += p_byte ^ 0x20;
     } else {
 #if defined XBEE_DEBUG_DEVICE_DUMP_MESSAGE_DECODE
-        m_if.printf("%02x ",p_byte);
+        m_if->printf("%02x ",p_byte);
 #else
-        m_if.putc(p_byte);
+        m_if->putc(p_byte);
 #endif
         c_sum += p_byte;
     }
@@ -290,10 +318,10 @@ XBeeDevice::XBeeDeviceReturn_t XBeeDevice::SendFrame( const char* const p_dat, s
         for( size_t i = 0;
              i < p_len;
              i++ ) {
-            m_if.putc(p_dat[i]);
+            m_if->putc(p_dat[i]);
         }
         
-        fflush( m_if );
+        fflush( *m_if );
                 
         wait_ms( p_wait_ms );
                 

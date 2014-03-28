@@ -30,26 +30,57 @@ limitations under the License.
 #define CMD_RESPONSE_GET_EDA '8'
 #define CMD_RESPONSE_SET_PID '9'
 #define CMD_RESPONSE_GET_PID '0'
+#define CMD_RESPONSE_SET_MY  'a'
+#define CMD_RESPONSE_GET_MY  'b'
+#define CMD_RESPONSE_GET_SH  'c'
+#define CMD_RESPONSE_GET_SL  'd'
+#define CMD_RESPONSE_SET_RR  'e'
+#define CMD_RESPONSE_GET_RR  'f'
+#define CMD_RESPONSE_SET_RN  'g'
+#define CMD_RESPONSE_GET_RN  'h'
+#define CMD_RESPONSE_SET_MM  'i'
+#define CMD_RESPONSE_GET_MM  'j'
 
-extern Serial pc;
+/** Lowest channel supported by the XBee S1 */
+#define XBEE_CHAN_MIN 0x0b
+/** Highest channel supported by the XBee S1 */
+#define XBEE_CHAN_MAX 0x1a
 
+/** Lowest channel supported by the XBee S1 Pro */
+#define XBEE_PRO_CHAN_MIN 0x0c
+/** Highest channel supported by the XBee S1 Pro */
+#define XBEE_PRO_CHAN_MAX 0x17
 
 /* Content for the various commands - value of 0 indicates a value to be populated (i.e. variable) */
 
-const uint8_t cmd_vr[] =      { CMD_RESPONSE_GET_VR, 'V', 'R' };
-const uint8_t cmd_hv[] =      { CMD_RESPONSE_GET_HV, 'H', 'V' };
+static const uint8_t cmd_vr[] =      { CMD_RESPONSE_GET_VR, 'V', 'R' };
+static const uint8_t cmd_hv[] =      { CMD_RESPONSE_GET_HV, 'H', 'V' };
+static const uint8_t cmd_sh[] =      { CMD_RESPONSE_GET_SH, 'S', 'H' };
+static const uint8_t cmd_sl[] =      { CMD_RESPONSE_GET_SL, 'S', 'L' };
 
-const uint8_t cmd_ch[] =      { CMD_RESPONSE_GET_CH, 'C', 'H' };
-const uint8_t cmd_set_ch[] =  { CMD_RESPONSE_SET_CH, 'C', 'H', 0 };
+static const uint8_t cmd_ch[] =      { CMD_RESPONSE_GET_CH, 'C', 'H' };
+static const uint8_t cmd_set_ch[] =  { CMD_RESPONSE_SET_CH, 'C', 'H', 0 };
 
-const uint8_t cmd_ce[] =      { CMD_RESPONSE_GET_CE, 'C', 'E' };
-const uint8_t cmd_set_ce[] =  { CMD_RESPONSE_SET_CE, 'C', 'E', 0 };
+static const uint8_t cmd_ce[] =      { CMD_RESPONSE_GET_CE, 'C', 'E' };
+static const uint8_t cmd_set_ce[] =  { CMD_RESPONSE_SET_CE, 'C', 'E', 0 };
 
-const uint8_t cmd_eda[] =     { CMD_RESPONSE_GET_EDA, 'A', '1' };
-const uint8_t cmd_set_eda[] = { CMD_RESPONSE_SET_EDA, 'A', '1', 0 };
+static const uint8_t cmd_eda[] =     { CMD_RESPONSE_GET_EDA, 'A', '1' };
+static const uint8_t cmd_set_eda[] = { CMD_RESPONSE_SET_EDA, 'A', '1', 0 };
 
-const uint8_t cmd_pid[] =     { CMD_RESPONSE_GET_PID, 'I', 'D' };
-const uint8_t cmd_set_pid[] = { CMD_RESPONSE_SET_PID, 'I', 'D', 0, 0 };
+static const uint8_t cmd_pid[] =     { CMD_RESPONSE_GET_PID, 'I', 'D' };
+static const uint8_t cmd_set_pid[] = { CMD_RESPONSE_SET_PID, 'I', 'D', 0, 0 };
+
+static const uint8_t cmd_my[] =      { CMD_RESPONSE_GET_MY,  'M', 'Y' };
+static const uint8_t cmd_set_my[] =  { CMD_RESPONSE_SET_MY,  'M', 'Y', 0, 0 };
+
+static const uint8_t cmd_rr[] =      { CMD_RESPONSE_GET_RR,  'R', 'R' };
+static const uint8_t cmd_set_rr[] =  { CMD_RESPONSE_SET_RR,  'R', 'R', 0 };
+
+static const uint8_t cmd_rn[] =      { CMD_RESPONSE_GET_RN,  'R', 'N' };
+static const uint8_t cmd_set_rn[] =  { CMD_RESPONSE_SET_RN,  'R', 'N', 0 };
+
+static const uint8_t cmd_mm[] =      { CMD_RESPONSE_GET_MM,  'M', 'M' };
+static const uint8_t cmd_set_mm[] =  { CMD_RESPONSE_SET_MM,  'M', 'M', 0 };
 
 #define XBEE_CMD_POSN_FRAME_ID (4U)
 #define XBEE_CMD_POSN_STATUS (7U)
@@ -57,14 +88,68 @@ const uint8_t cmd_set_pid[] = { CMD_RESPONSE_SET_PID, 'I', 'D', 0, 0 };
 
 #define XBEE_CMD_RESPONS_HAS_DATA( _p_len ) ((_p_len > ( XBEE_CMD_POSN_PARAM_START + 1 ))
 
-XBeeApiCmdAt::XBeeApiCmdAt() : XBeeApiFrameDecoder( ) , m_haveHwVer( false ),
-    m_haveFwVer( false ),
-    m_haveChan( false ),
-    m_havePANId( false ),
-    m_haveEDA( false ),
-    m_haveCE( false )
+XBeeApiCmdAt::XBeeApiCmdAt( XBeeDevice* const p_device ) : XBeeApiFrameDecoder( p_device ) , 
+    m_have_hwVer( false ),
+    m_have_fwVer( false ),
+    m_have_chan( false ),
+    m_have_PANId( false ),
+    m_have_EDA( false ),
+    m_have_CE( false ),
+    m_have_sourceAddress( false ),
+    m_have_snLow( false ),
+    m_have_snHigh( false ),
+    m_have_retries( false ),
+    m_have_randomDelaySlots( false ),
+    m_have_macMode( false )
 {
 }
+
+#define PROCESS_SET_GET_RESPONSE_GENERIC( _type, _var, _src, _t ) \
+            case CMD_RESPONSE_SET_ ## _type: \
+            case CMD_RESPONSE_GET_ ## _type: \
+                if( p_data[ XBEE_CMD_POSN_STATUS ] == 0 ) \
+                { \
+                    if( CMD_RESPONSE_GET_ ## _type == p_data[ XBEE_CMD_POSN_API_ID ] ) \
+                    { \
+                        m_ ##_var = (_t) (_src); \
+                    } \
+                    else \
+                    { \
+                        m_ ## _var = m_ ## _var ## Pend; \
+                    } \
+                    m_have_ ## _var = true; \
+                } \
+                else \
+                { \
+                    /* TODO */ \
+                } \
+                ret_val = true; \
+                break;
+
+#define PROCESS_GET_RESPONSE_GENERIC( _type, _var, _src ) \
+            case CMD_RESPONSE_GET_ ## _type: \
+                if( p_data[ XBEE_CMD_POSN_STATUS ] == 0 ) \
+                { \
+                    m_ ##_var = _src; \
+                    m_have_ ## _var = true; \
+                } \
+                else \
+                { \
+                    /* TODO */ \
+                } \
+                ret_val = true; \
+                break;
+
+#define PROCESS_SET_GET_RESPONSE_8BIT_WITHCAST( _type, _var, _t )  PROCESS_SET_GET_RESPONSE_GENERIC( _type, _var, p_data[ XBEE_CMD_POSN_PARAM_START ], _t )
+#define PROCESS_SET_GET_RESPONSE_8BIT( _type, _var )               PROCESS_SET_GET_RESPONSE_GENERIC( _type, _var, p_data[ XBEE_CMD_POSN_PARAM_START ], uint8_t )
+#define PROCESS_SET_GET_RESPONSE_16BIT( _type, _var )              PROCESS_SET_GET_RESPONSE_GENERIC( _type, _var, ((uint16_t)p_data[ XBEE_CMD_POSN_PARAM_START ] << 8) | p_data[ XBEE_CMD_POSN_PARAM_START + 1 ], uint16_t )
+
+#define PROCESS_GET_RESPONSE_16BIT( _type, _var ) PROCESS_GET_RESPONSE_GENERIC( _type, _var, ((uint16_t)p_data[ XBEE_CMD_POSN_PARAM_START ] << 8) | p_data[ XBEE_CMD_POSN_PARAM_START + 1 ] )
+#define PROCESS_GET_RESPONSE_32BIT( _type, _var ) PROCESS_GET_RESPONSE_GENERIC( _type, _var, ((uint32_t)p_data[ XBEE_CMD_POSN_PARAM_START ] << 24) |\
+                                                                                             ((uint32_t)p_data[ XBEE_CMD_POSN_PARAM_START + 1 ] << 16) |\
+                                                                                             ((uint32_t)p_data[ XBEE_CMD_POSN_PARAM_START + 2 ] << 8) |\
+                                                                                             ((uint32_t)p_data[ XBEE_CMD_POSN_PARAM_START + 3 ]))
+
 
 bool XBeeApiCmdAt::decodeCallback( const uint8_t* const p_data, size_t p_len )
 {
@@ -73,121 +158,20 @@ bool XBeeApiCmdAt::decodeCallback( const uint8_t* const p_data, size_t p_len )
     if( XBEE_CMD_AT_RESPONSE == p_data[ XBEE_CMD_POSN_API_ID ] ) {
 
         switch( p_data[ XBEE_CMD_POSN_FRAME_ID ] ) {
-            case CMD_RESPONSE_GET_HV:
-                if( p_data[ XBEE_CMD_POSN_STATUS ] == 0 ) 
-                {
-                    m_hwVer = ((uint16_t)p_data[ XBEE_CMD_POSN_PARAM_START ] << 8) + p_data[ XBEE_CMD_POSN_PARAM_START + 1 ];
-                    m_haveHwVer = true;
-                } 
-                else 
-                {
-                    pc.printf("\r\nERROR1\r\n");    
-                }
-                ret_val = true;
-                break;
-
-            case CMD_RESPONSE_GET_VR:
-                if( p_data[ XBEE_CMD_POSN_STATUS ] == 0 ) 
-                {
-                    m_fwVer = ((uint16_t)p_data[ XBEE_CMD_POSN_PARAM_START ] << 8) + p_data[ XBEE_CMD_POSN_PARAM_START + 1 ];
-                    m_haveFwVer = true;
-                } 
-                else 
-                {
-                    pc.printf("\r\nERROR2\r\n");    
-                }
-                ret_val = true;
-                break;
-
-            case CMD_RESPONSE_GET_CH:
-            case CMD_RESPONSE_SET_CH:
-                if( p_data[ XBEE_CMD_POSN_STATUS ] == 0 ) 
-                {
-                    if( CMD_RESPONSE_GET_CH == p_data[ XBEE_CMD_POSN_API_ID ] )
-                    {
-                        m_chan = p_data[ XBEE_CMD_POSN_PARAM_START ];
-                    } 
-                    else
-                    {  
-                        m_chan = m_chanPend;
-                    }
-                    #if 0
-                    printf("\r\n%02x (%2d) - %02x %02x %02x %02x %02x %02x %02x %02x %02x\r\n",p_data[ XBEE_CMD_POSN_API_ID ],p_len,
-                        p_data[0],p_data[1],p_data[2],p_data[3],p_data[4],p_data[5],p_data[6],p_data[7],p_data[8]);
-                    #endif
-                    m_haveChan = true;
-                } 
-                else 
-                {
-                    /* TODO */
-                    pc.printf("\r\nERROR3\r\n");    
-                }
-                ret_val = true;
-                break;
-
-            case CMD_RESPONSE_SET_CE:
-            case CMD_RESPONSE_GET_CE:
-                if( p_data[ XBEE_CMD_POSN_STATUS ] == 0 ) 
-                {
-                    if( CMD_RESPONSE_GET_CE == p_data[ XBEE_CMD_POSN_API_ID ] )
-                    {
-                        m_CE = p_data[ XBEE_CMD_POSN_PARAM_START ];
-                    }
-                    else
-                    {
-                        m_CE = m_CEPend;
-                    }
-                    m_haveCE = true;
-                } 
-                else 
-                {
-                    pc.printf("\r\nERROR3\r\n");    
-                }
-                ret_val = true;
-                break;
-
-            case CMD_RESPONSE_SET_PID:
-            case CMD_RESPONSE_GET_PID:
-                if( p_data[ XBEE_CMD_POSN_STATUS ] == 0 ) 
-                {
-                    if( CMD_RESPONSE_GET_PID == p_data[ XBEE_CMD_POSN_API_ID ] )
-                    {
-                        m_PANId = p_data[ XBEE_CMD_POSN_PARAM_START ];
-                    } 
-                    else
-                    {
-                        m_PANId = m_PANIdPend;
-                    }
-                    m_havePANId = true;
-                } 
-                else 
-                {
-                    pc.printf("\r\nERROR3\r\n");    
-                }
-                ret_val = true;
-                break;
-
-            case CMD_RESPONSE_SET_EDA:
-            case CMD_RESPONSE_GET_EDA:
-                if( p_data[ XBEE_CMD_POSN_STATUS ] == 0 ) 
-                {
-                    if( CMD_RESPONSE_GET_EDA == p_data[ XBEE_CMD_POSN_API_ID ] )
-                    {
-                        m_EDA = p_data[ XBEE_CMD_POSN_PARAM_START ];
-                    }
-                    else
-                    {
-                        m_EDA = m_EDAPend;
-                    }
-                    m_haveEDA = true;
-                } 
-                else 
-                {
-                    pc.printf("\r\nERROR3\r\n");    
-                }
-                ret_val = true;
-                break;
-
+            
+            PROCESS_GET_RESPONSE_16BIT( HV, hwVer )
+            PROCESS_GET_RESPONSE_16BIT( VR, fwVer )
+            
+            PROCESS_SET_GET_RESPONSE_8BIT( CH, chan )
+            PROCESS_SET_GET_RESPONSE_8BIT( CE, CE )
+            PROCESS_SET_GET_RESPONSE_8BIT( PID, PANId )
+            PROCESS_SET_GET_RESPONSE_8BIT( EDA, EDA )
+            PROCESS_SET_GET_RESPONSE_8BIT( RR, retries )
+            PROCESS_SET_GET_RESPONSE_16BIT( MY, sourceAddress )
+            PROCESS_GET_RESPONSE_32BIT( SH, snHigh )
+            PROCESS_GET_RESPONSE_32BIT( SL, snLow )
+            PROCESS_SET_GET_RESPONSE_8BIT( RN, randomDelaySlots )
+            PROCESS_SET_GET_RESPONSE_8BIT_WITHCAST( MM, macMode, XBeeApiMACMode_e )
         }
     }
     return ret_val;
@@ -195,142 +179,108 @@ bool XBeeApiCmdAt::decodeCallback( const uint8_t* const p_data, size_t p_len )
 
 bool XBeeApiCmdAt::setChannel( uint8_t const p_chan )
 {
-    XBeeApiCmdAtSet<uint8_t> req( cmd_set_ch, p_chan );
-
-    m_chanPend = p_chan;
-    m_device->SendFrame( &req );
-    return true;
-}
-
-bool XBeeApiCmdAt::requestHardwareVersion( void )
-{
-    XBeeApiFrame req( XBEE_CMD_AT_CMD, cmd_hv, sizeof( cmd_hv ));
-    m_haveHwVer = false;
-    m_device->SendFrame( &req );
-    return true;
-}
-
-bool XBeeApiCmdAt::requestFirmwareVersion( void )
-{
-    XBeeApiFrame req( XBEE_CMD_AT_CMD, cmd_vr, sizeof( cmd_vr ));
-    m_haveFwVer = false;
-    m_device->SendFrame( &req );
-    return true;
-}
-
-bool XBeeApiCmdAt::requestChannel( void )
-{
-    XBeeApiFrame req( XBEE_CMD_AT_CMD, cmd_ch, sizeof( cmd_ch ));
-    m_haveChan = false;
-    m_device->SendFrame( &req );
-    return true;
-}
-
-bool XBeeApiCmdAt::requestPanId( void )
-{
-    XBeeApiFrame req( XBEE_CMD_AT_CMD, cmd_pid, sizeof( cmd_pid ));
-    m_havePANId = false;
-    m_device->SendFrame( &req );
-    return true;
-}
-
-bool XBeeApiCmdAt::requestCoordinatorEnabled( void )
-{
-    XBeeApiFrame req( XBEE_CMD_AT_CMD, cmd_ce, sizeof( cmd_ce ));
-    m_haveCE = false;
-    m_device->SendFrame( &req );
-    return true;
-}
-
-bool XBeeApiCmdAt::requestEndDeviceAssociationEnabled( void )
-{
-    XBeeApiFrame req( XBEE_CMD_AT_CMD, cmd_eda, sizeof( cmd_eda ));
-    m_haveEDA = false;
-    m_device->SendFrame( &req );
-    return true;
-}
-
-bool XBeeApiCmdAt::getFirmwareVersion( uint16_t* const p_ver )
-{
-    if( m_haveFwVer ) {
-        *p_ver = m_fwVer;
+    bool ret_val = false;
+    
+    if((( m_device->getXBeeModel() == XBeeDevice::XBEEDEVICE_S1 ) && 
+        ( p_chan >= XBEE_CHAN_MIN ) &&
+        ( p_chan <= XBEE_CHAN_MAX )) ||
+       (( m_device->getXBeeModel() == XBeeDevice::XBEEDEVICE_S1_PRO ) && 
+        ( p_chan >= XBEE_PRO_CHAN_MIN ) &&
+        ( p_chan <= XBEE_PRO_CHAN_MAX )))
+    {
+        XBeeApiCmdAtSet<uint8_t> req( cmd_set_ch, p_chan );
+    
+        m_chanPend = p_chan;
+        m_device->SendFrame( &req );
+        ret_val = true;
     }
-    return m_haveFwVer;
-
+    return ret_val;
 }
 
-bool XBeeApiCmdAt::getHardwareVersion( uint16_t* const p_ver )
-{
-    if( m_haveHwVer ) {
-        *p_ver = m_hwVer;
-    }
-    return m_haveHwVer;
+#define MAKE_REQUEST( _name, _mnemonic, _cmd ) \
+bool XBeeApiCmdAt::request ## _name( void ) \
+{\
+    XBeeApiFrame req( XBEE_CMD_AT_CMD, _cmd, sizeof( _cmd ));\
+    m_have_ ## _mnemonic = false;\
+    m_device->SendFrame( &req );\
+    return true;\
 }
 
-bool XBeeApiCmdAt::getChannel( uint8_t* const p_chan )
-{
-    if( m_haveChan ) {
-        *p_chan = m_chan;
-    }
-    return m_haveChan;
-}
+MAKE_REQUEST( HardwareVersion, hwVer, cmd_hv )
+MAKE_REQUEST( FirmwareVersion, fwVer, cmd_vr )
+MAKE_REQUEST( Channel, chan, cmd_ch )
+MAKE_REQUEST( PanId, PANId, cmd_pid )
+MAKE_REQUEST( CoordinatorEnabled, CE, cmd_ce )
+MAKE_REQUEST( EndDeviceAssociationEnabled, EDA, cmd_eda )
+MAKE_REQUEST( SourceAddress, sourceAddress, cmd_my )
+MAKE_REQUEST( Retries, retries, cmd_rr )
+MAKE_REQUEST( RandomDelaySlots, randomDelaySlots, cmd_rn )
+MAKE_REQUEST( MacMode, macMode, cmd_mm );
 
-bool XBeeApiCmdAt::getCoordinatorEnabled( bool* const p_en )
+bool XBeeApiCmdAt::requestSerialNumber( void )
 {
-    if( m_haveCE ) {
-        *p_en = m_CE;
-    }
-    return m_haveCE;
-}
-
-bool XBeeApiCmdAt::setCoordinatorEnabled( const bool p_en )
-{
-    XBeeApiCmdAtSet<bool> req( cmd_set_ce, p_en );
-
-    m_haveCE = false;
-    m_CEPend = p_en;
-    m_device->SendFrame( &req );
+    XBeeApiFrame req1( XBEE_CMD_AT_CMD, cmd_sh, sizeof( cmd_sh ));
+    XBeeApiFrame req2( XBEE_CMD_AT_CMD, cmd_sl, sizeof( cmd_sl ));
+    m_have_snHigh = m_have_snLow = false;
+    m_device->SendFrame( &req1 );
+    m_device->SendFrame( &req2 );
     return true;
 }
 
-bool XBeeApiCmdAt::getEndDeviceAssociationEnabled( bool* const p_en )
+#define MAKE_GET(_name, _mnemonic, _type ) \
+bool XBeeApiCmdAt::get ## _name( _type* const p_param ) \
+{\
+    if( m_have_ ## _mnemonic ) {\
+        *p_param = m_ ## _mnemonic;\
+    } \
+    return m_have_ ## _mnemonic; \
+}
+
+MAKE_GET( FirmwareVersion, fwVer, uint16_t )
+MAKE_GET( HardwareVersion, hwVer, uint16_t )
+MAKE_GET( Channel, chan, uint8_t )
+MAKE_GET( CoordinatorEnabled, CE, bool );
+MAKE_GET( EndDeviceAssociationEnabled, EDA, bool )
+MAKE_GET( PanId, PANId, panId_t )
+MAKE_GET( SourceAddress, sourceAddress, uint16_t )
+MAKE_GET( Retries, retries, uint8_t )
+MAKE_GET( RandomDelaySlots, randomDelaySlots, uint8_t )
+MAKE_GET( MacMode, macMode, XBeeApiMACMode_e )
+
+bool XBeeApiCmdAt::getSerialNumber( uint64_t* const p_sn )
 {
-    if( m_haveEDA ) {
-        *p_en = m_EDA;
+    /* Need both halves to have the complete serial number */
+    bool have_sn = m_have_snLow && m_have_snHigh;
+    if( have_sn )
+    {
+        *p_sn = m_snHigh;
+        *p_sn = *p_sn << 32U;
+        *p_sn |= m_snLow;
     }
-    return m_haveEDA;
-}
-bool XBeeApiCmdAt::setEndDeviceAssociationEnabled( const bool p_en  )
-{
-    XBeeApiCmdAtSet<bool> req( cmd_set_eda, p_en );
-
-    m_haveEDA = false;
-    m_EDAPend = p_en;
-    m_device->SendFrame( &req );
-    return true;
+    return( have_sn );
 }
 
-bool XBeeApiCmdAt::getPanId( panId_t* const p_chan )
-{
-    if( m_havePANId ) {
-        *p_chan = m_PANId;
-    }
-    return m_havePANId;
-
-}
-bool XBeeApiCmdAt::setPanId( const panId_t p_chan )
-{
-    XBeeApiCmdAtSet<panId_t> panid( cmd_set_pid, p_chan );
-
-    m_havePANId = false;
-    m_PANIdPend = p_chan;
-    m_device->SendFrame( &panid );
-    return true;
+#define MAKE_SET( _name, _mnemonic, _cmd, _type ) \
+bool XBeeApiCmdAt::set ## _name( const _type p_param ) \
+{\
+    XBeeApiCmdAtSet<_type> req( _cmd, p_param );\
+\
+    m_have_ ## _mnemonic = false;\
+    m_## _mnemonic ## Pend = p_param;\
+    m_device->SendFrame( &req );\
+    return true;\
 }
 
+MAKE_SET( CoordinatorEnabled,          CE,               cmd_set_ce,  bool )
+MAKE_SET( EndDeviceAssociationEnabled, EDA,              cmd_set_eda, bool )
+MAKE_SET( PanId,                       PANId,            cmd_set_pid, panId_t )
+MAKE_SET( SourceAddress,               sourceAddress,    cmd_set_my,  uint16_t )
+MAKE_SET( Retries,                     retries,          cmd_set_rr,  uint8_t )
+MAKE_SET( RandomDelaySlots,            randomDelaySlots, cmd_set_rn,  uint8_t )
+MAKE_SET( MacMode,                     macMode,          cmd_set_mm,  XBeeApiMACMode_e )
 
-XBeeApiCmdAtBlocking::XBeeApiCmdAtBlocking( const uint16_t p_timeout, const uint16_t p_slice ) :
-    XBeeApiCmdAt( ),
+XBeeApiCmdAtBlocking::XBeeApiCmdAtBlocking( XBeeDevice* const p_device, const uint16_t p_timeout, const uint16_t p_slice ) :
+    XBeeApiCmdAt( p_device ),
     m_timeout( p_timeout ),
     m_slice( p_slice )
 {
@@ -353,7 +303,6 @@ XBeeApiCmdAtBlocking::XBeeApiCmdAtBlocking( const uint16_t p_timeout, const uint
         XBeeApiCmdAtBlocking::getHardwareVersion being called due to polymorphism. */
 #define BLOCKING_GET( _REQ_FN, _GET_FN, _VAR ) \
     bool ret_val = false; \
-    uint16_t counter = m_timeout; \
 \
     if( _GET_FN( _VAR ) )\
     {\
@@ -361,9 +310,11 @@ XBeeApiCmdAtBlocking::XBeeApiCmdAtBlocking( const uint16_t p_timeout, const uint
     } \
     else if( _REQ_FN() )\
     {\
-        bool cont = false;\
+        uint16_t counter = m_timeout; \
+        bool cont;\
 \
         do{\
+            cont = false; \
             wait_ms( m_slice );\
             if( _GET_FN( _VAR ) )\
             {\
@@ -389,9 +340,10 @@ XBeeApiCmdAtBlocking::XBeeApiCmdAtBlocking( const uint16_t p_timeout, const uint
 \
     if( _SET_FN( _VAR ) )\
     {\
-        bool cont = false;\
+        bool cont;\
 \
         do{\
+            cont = false;\
             wait_ms( m_slice );\
             if( _GET_FN( &readback ) &&\
                ( readback == _VAR ))\
@@ -420,6 +372,13 @@ bool XBeeApiCmdAtBlocking::getFirmwareVersion( uint16_t* const p_ver )
     BLOCKING_GET( XBeeApiCmdAt::requestFirmwareVersion,
                   XBeeApiCmdAt::getFirmwareVersion,
                   p_ver );
+}
+
+bool XBeeApiCmdAtBlocking::getSerialNumber( uint64_t* const p_sn )
+{
+    BLOCKING_GET( XBeeApiCmdAt::requestSerialNumber,
+                  XBeeApiCmdAt::getSerialNumber,
+                  p_sn );
 }
 
 bool XBeeApiCmdAtBlocking::getChannel( uint8_t* const p_chan )
@@ -481,6 +440,68 @@ bool XBeeApiCmdAtBlocking::setPanId( const panId_t p_chan )
                   p_chan,
                   panId_t );
 }
+
+bool XBeeApiCmdAtBlocking::getSourceAddress( uint16_t* const p_addr )
+{
+    BLOCKING_GET( XBeeApiCmdAt::requestSourceAddress,
+                  XBeeApiCmdAt::getSourceAddress,
+                  p_addr );
+}
+
+bool XBeeApiCmdAtBlocking::setSourceAddress( const uint16_t p_addr )
+{
+    BLOCKING_SET( XBeeApiCmdAt::setSourceAddress,
+                  XBeeApiCmdAt::getSourceAddress,
+                  p_addr,
+                  uint16_t );
+}
+
+bool XBeeApiCmdAtBlocking::getRetries( uint8_t* const p_addr )
+{
+    BLOCKING_GET( XBeeApiCmdAt::requestRetries,
+                  XBeeApiCmdAt::getRetries,
+                  p_addr );
+}
+
+bool XBeeApiCmdAtBlocking::setRetries( const uint8_t p_addr )
+{
+    BLOCKING_SET( XBeeApiCmdAt::setRetries,
+                  XBeeApiCmdAt::getRetries,
+                  p_addr,
+                  uint8_t );
+}
+
+bool XBeeApiCmdAtBlocking::getRandomDelaySlots( uint8_t* const p_addr )
+{
+    BLOCKING_GET( XBeeApiCmdAt::requestRandomDelaySlots,
+                  XBeeApiCmdAt::getRandomDelaySlots,
+                  p_addr );
+}
+
+bool XBeeApiCmdAtBlocking::setRandomDelaySlots( const uint8_t p_addr )
+{
+    BLOCKING_SET( XBeeApiCmdAt::setRandomDelaySlots,
+                  XBeeApiCmdAt::getRandomDelaySlots,
+                  p_addr,
+                  uint8_t );
+}
+
+bool XBeeApiCmdAtBlocking::getMacMode( XBeeApiMACMode_e* const p_mode )
+{
+    BLOCKING_GET( XBeeApiCmdAt::requestMacMode,
+                  XBeeApiCmdAt::getMacMode,
+                  p_mode );
+}
+           
+bool XBeeApiCmdAtBlocking::setMacMode( const XBeeApiMACMode_e p_mode )
+{
+    BLOCKING_SET( XBeeApiCmdAt::setMacMode,
+                  XBeeApiCmdAt::getMacMode,
+                  p_mode,
+                  XBeeApiMACMode_e );
+}
+
+
 
 template < typename T >
 XBeeApiCmdAt::XBeeApiCmdAtSet<T>::XBeeApiCmdAtSet( const uint8_t* const p_data,

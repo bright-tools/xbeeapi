@@ -45,12 +45,27 @@ limitations under the License.
          a message is received */
 class XBeeDevice
 {
+   public:
+     /** Represent the different XBee models */
+     typedef enum {
+         /* XBee S1 (aka XBee 802.15.4) - see http://www.digi.com/products/wireless-wired-embedded-solutions/zigbee-rf-modules/point-multipoint-rfmodules/xbee-series1-module */
+         XBEEDEVICE_S1,
+         /* XBee S1 Pro (aka XBee 802.15.4 Pro) */
+         XBEEDEVICE_S1_PRO
+     } XBeeDeviceModel_t;
+
    private:
+ 
+     /** Common class initialisation, shared between constructors */
+     void init( void );
  
 #if defined  XBEEAPI_CONFIG_USING_RTOS
      /** Mutex for accessing the serial interface */
      rtos::Mutex  m_ifMutex;
 #endif
+   
+     /** The model of XBee that this XBeeDevice is associated with */
+     XBeeDeviceModel_t m_model;
    
      /** Track whether the XBee is in CMD mode or API mode */
      bool m_inAtCmdMode;
@@ -60,7 +75,11 @@ class XBeeDevice
      uint16_t m_rxMsgLastWasEsc;
    
      /** Serial interface for the XBee comms */
-     Serial m_if;
+     Serial* m_if;
+     
+     /** Flag to indicate if the Serial object m_if was created by this class and
+         hence needs deleting in the destructor */
+     bool m_serialNeedsDelete;
      
      /** Call-back function from MBED triggered when data is
          received on the XBee's serial interface */
@@ -112,6 +131,9 @@ class XBeeDevice
 
      /** Constructor.  Parameters are used to specify the particulars of the connection to the XBee
      
+         Objects using this constructor will default to be associated with an XBee S1 (see XBeeDeviceModel_t).  
+         This should be altered via setXBeeModel() if required
+     
          @param p_tx Serial interface TX pin
          @param p_rx Serial interface RX pin
          @param p_rts Pin to use for RTS (flow control).  Will only be used if supported.  Can specify NC to disable.
@@ -119,7 +141,25 @@ class XBeeDevice
      */
      XBeeDevice( PinName p_tx, PinName p_rx, PinName p_rts, PinName p_cts );  
 
+     /** Constructor.  Parameters are used to specify the particulars of the connection to the XBee
+     
+         Objects using this constructor will default to be associated with an XBee S1 (see XBeeDeviceModel_t).  
+         This should be altered via setXBeeModel() if required
+     
+         @param p_serialIf Pointer to the serial interface to be used to communicate with the XBee.
+                           The referenced object must remain valid for as long as the XBeeDevice object is
+                           being used.  Must not be NULL.
+     */
+     XBeeDevice( Serial* p_serialIf );
+
+     /** Destructor */
      virtual ~XBeeDevice( void );  
+     
+     /** Determine what type of XBee model this object is associated with */
+     XBeeDeviceModel_t getXBeeModel() const;
+     
+     /** Set the type of XBee model this object is associated with */
+     void setXBeeModel( const XBeeDeviceModel_t p_model );
      
      /** Transmit the specified frame to the XBee.  This method does not block waiting for a response, but returns and
          expects that any response will be dealt with by an appropriately registered decoder

@@ -55,20 +55,33 @@ class XBeeApiCmdAt : public XBeeApiFrameDecoder
         typedef uint16_t panId_t;
         /** Type to represent a wireless channel number */
         typedef uint8_t  channel_t;
+        /** Type to represent the different MAC modes supported by the XBee */
+        typedef enum {
+            XBEE_API_MAC_MODE_DIGI_ACK        = 0,
+            XBEE_API_MAC_MODE_802_15_4_NO_ACK = 1,
+            XBEE_API_MAC_MODE_802_15_4_ACK    = 2,
+            XBEE_API_MAC_MODE_DIGI_NO_ACK     = 3,
+        } XBeeApiMACMode_e;
     
     protected:
         /** Indicates whether or not m_hwVer contains data retrieved from the XBee */
-        bool m_haveHwVer;
+        bool m_have_hwVer;
         /** Indicates whether or not m_fwVer contains data retrieved from the XBee */
-        bool m_haveFwVer;
+        bool m_have_fwVer;
         /** Indicates whether or not m_chan contains data retrieved from the XBee */
-        bool m_haveChan;
+        bool m_have_chan;
         /** Indicates whether or not m_PANId contains data retrieved from the XBee */
-        bool m_havePANId;
+        bool m_have_PANId;
         /** Indicates whether or not m_EDA contains data retrieved from the XBee */
-        bool m_haveEDA;
+        bool m_have_EDA;
         /** Indicates whether or not m_CE contains data retrieved from the XBee */
-        bool m_haveCE;
+        bool m_have_CE;
+        bool m_have_sourceAddress;
+        bool m_have_snLow;
+        bool m_have_snHigh;
+        bool m_have_retries;
+        bool m_have_randomDelaySlots;
+        bool m_have_macMode;
         
         uint16_t m_hwVer;
         uint16_t m_fwVer;
@@ -80,6 +93,16 @@ class XBeeApiCmdAt : public XBeeApiFrameDecoder
         bool m_EDAPend;
         bool m_CE;
         bool m_CEPend;
+        uint16_t m_sourceAddress;
+        uint16_t m_sourceAddressPend;
+        uint32_t m_snLow;
+        uint32_t m_snHigh;
+        uint8_t  m_retries;
+        uint8_t  m_retriesPend;
+        uint8_t  m_randomDelaySlots;
+        uint8_t  m_randomDelaySlotsPend;
+        XBeeApiMACMode_e m_macMode;
+        XBeeApiMACMode_e m_macModePend;
 
         /** Template class to create an XBeeApiFrame which can be used to change
             the value of one of the XBee parameters.  This class is used by the
@@ -108,8 +131,10 @@ class XBeeApiCmdAt : public XBeeApiFrameDecoder
 
     public:
 
-        /** Constructor */
-        XBeeApiCmdAt( );
+        /** Constructor 
+        
+            \param p_device XBee device with which this object should be associated */
+        XBeeApiCmdAt( XBeeDevice* const p_device = NULL );
        
         /** Destructor */
         virtual ~XBeeApiCmdAt( void ) {};
@@ -124,6 +149,23 @@ class XBeeApiCmdAt : public XBeeApiFrameDecoder
         bool requestCoordinatorEnabled( void );
         bool requestEndDeviceAssociationEnabled( void );
         bool requestPanId( void );
+        bool requestSourceAddress( void );
+        bool requestSerialNumber( void );
+        /** Request the number of retries the XBee is configured to make.
+            Note that the 802.15.4 MAC already allows 3 retries, so this parameter
+            specifies an additional multiple of 3 retries
+            As the data is retrieved asynchronously to this call,
+            once the response is received it can be accessed via
+            getRetries() 
+        */
+        bool requestRetries( void );
+        
+        /** Request the minimum value of the back-off exponent in the CSMA-CA algorithm
+            used in collision avoidance.
+        */
+        bool requestRandomDelaySlots( void );
+        
+        bool requestMacMode( void );
 
         /** Read the XBee's hardware version identifier.  
        
@@ -138,18 +180,32 @@ class XBeeApiCmdAt : public XBeeApiFrameDecoder
             XBee - the identifier must previously have been requested 
             via requestFirmwareVersion().  The method is non-blocking. */
         virtual bool getFirmwareVersion( uint16_t* const p_ver );
+
+        virtual bool getSerialNumber( uint64_t* const p_sn );
        
-       virtual bool getChannel( uint8_t* const p_chan );
-       virtual bool setChannel( uint8_t const p_chan );
+        virtual bool getChannel( uint8_t* const p_chan );
+        virtual bool setChannel( uint8_t const p_chan );
        
-       virtual bool getCoordinatorEnabled( bool* constp_en );
-       virtual bool setCoordinatorEnabled( const bool p_en );
+        virtual bool getCoordinatorEnabled( bool* const p_en );
+        virtual bool setCoordinatorEnabled( const bool p_en );
        
-       virtual bool getEndDeviceAssociationEnabled( bool* const p_en ); 
-       virtual bool setEndDeviceAssociationEnabled( const bool p_en  );
+        virtual bool getEndDeviceAssociationEnabled( bool* const p_en ); 
+        virtual bool setEndDeviceAssociationEnabled( const bool p_en  );
        
-       virtual bool getPanId( panId_t* const p_id );       
-       virtual bool setPanId( const panId_t p_id );       
+        virtual bool getPanId( panId_t* const p_id );       
+        virtual bool setPanId( const panId_t p_id );       
+
+        virtual bool getSourceAddress( uint16_t* const p_addr );       
+        virtual bool setSourceAddress( const uint16_t p_addr );       
+
+        virtual bool getRetries( uint8_t* const p_addr );       
+        virtual bool setRetries( const uint8_t p_addr );       
+
+        virtual bool getRandomDelaySlots( uint8_t* const p_addr );       
+        virtual bool setRandomDelaySlots( const uint8_t p_addr );       
+
+        virtual bool getMacMode( XBeeApiMACMode_e* const p_mode );       
+        virtual bool setMacMode( const XBeeApiMACMode_e p_mode );       
 };
 
 /** Class to access the configuration interface of the XBee.
@@ -176,13 +232,17 @@ class XBeeApiCmdAtBlocking : public XBeeApiCmdAt
     public:
        /** Constructor 
        
+            \param p_device XBee device with which this object should 
+                            be associated 
             \param p_timeout Timeout to be used when waiting for 
                              data from the XBee, specified in
                              milliseconds
             \param p_slice While waiting for data, blocking methods
                            will call the OS wait_ms() function, using
                            the value specified by p_slice */
-       XBeeApiCmdAtBlocking( const uint16_t p_timeout = 1000, const uint16_t p_slice = 100);
+       XBeeApiCmdAtBlocking( XBeeDevice* const p_device = NULL,
+                            const uint16_t p_timeout = 1000, 
+                            const uint16_t p_slice = 100);
        
        /** Destructor */
        virtual ~XBeeApiCmdAtBlocking( void ) {};
@@ -191,6 +251,7 @@ class XBeeApiCmdAtBlocking : public XBeeApiCmdAt
        
        virtual bool getHardwareVersion( uint16_t* const p_ver );
        virtual bool getFirmwareVersion( uint16_t* const p_ver );
+        virtual bool getSerialNumber( uint64_t* const p_sn );
 
        virtual bool getChannel( uint8_t* const p_chan );
        virtual bool setChannel( uint8_t const p_chan );
@@ -203,6 +264,18 @@ class XBeeApiCmdAtBlocking : public XBeeApiCmdAt
        
        virtual bool getPanId( panId_t* const p_id );       
        virtual bool setPanId( const panId_t p_id );
+
+       virtual bool getSourceAddress( uint16_t* const p_addr );       
+       virtual bool setSourceAddress( const uint16_t p_addr );  
+       
+        virtual bool getRetries( uint8_t* const p_addr );       
+        virtual bool setRetries( const uint8_t p_addr );       
+
+        virtual bool getRandomDelaySlots( uint8_t* const p_addr );       
+        virtual bool setRandomDelaySlots( const uint8_t p_addr );       
+
+        virtual bool getMacMode( XBeeApiMACMode_e* const p_mode );       
+        virtual bool setMacMode( const XBeeApiMACMode_e p_mode );       
 };
 
 #endif
