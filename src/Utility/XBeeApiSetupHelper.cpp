@@ -18,13 +18,23 @@ limitations under the License.
 
 #include "XBeeApiSetupHelper.hpp"
 
-void xbeeSetNetworkTypeP2P( XBeeApiCmdAt* const p_xbeeCmd,
+bool xbeeSetNetworkTypeP2P( XBeeApiCmdAt* const p_xbeeCmd,
                             const XBeeApiCmdAt::panId_t p_id,
                             const XBeeApiCmdAt::channel_t p_chan )
 {    
-    p_xbeeCmd->setCoordinatorEnabled( false );
-    p_xbeeCmd->setEndDeviceAssociationEnabled( false );
-    p_xbeeCmd->setChannel( p_chan );
-    p_xbeeCmd->setPanId( p_id );
+    bool ret_val = p_xbeeCmd->setCoordinatorEnabled( false );
+    if( ret_val ) 
+    {
+    	ret_val = p_xbeeCmd->setEndDeviceAssociationEnabled( false );
+    }
+    if( ret_val ) 
+    {
+    	p_xbeeCmd->setChannel( p_chan );
+    }
+    if( ret_val ) 
+    {
+    	p_xbeeCmd->setPanId( p_id );
+    }
+    return ret_val;
 }
 

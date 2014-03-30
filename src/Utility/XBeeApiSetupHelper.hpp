@@ -45,8 +45,10 @@ typedef enum {
                      as a decoder with an XBee device.
     \param p_id Network ID to use
     \param p_chan Channel to use
+    \return true in the case that the XBee was configured, false in the case that a problem
+            was encountered
 */      
-extern void xbeeSetNetworkTypeP2P( XBeeApiCmdAt* const           p_xbeeCmd,
+extern bool xbeeSetNetworkTypeP2P( XBeeApiCmdAt* const           p_xbeeCmd,
                                    const XBeeApiCmdAt::panId_t   p_id,
                                    const XBeeApiCmdAt::channel_t p_chan );
 
