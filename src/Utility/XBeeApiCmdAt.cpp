@@ -517,16 +517,19 @@ XBeeApiCmdAt::XBeeApiCmdAtSet<T>::XBeeApiCmdAtSet( const uint8_t* const p_data,
     m_buffer[1] = p_data[1];
     m_buffer[2] = p_data[2];
     
-    dest = &( m_buffer[3] );
+    m_dataLen = sizeof( m_buffer );
+
+    /* TODO: This copy code isn't portable - it's assuming that the data in 
+     * p_data is little endian */
+    dest = &( m_buffer[ m_dataLen - 1 ] );
     
     for( s = 0;
          s < sizeof( T );
-         s++, dest++, src++ ) {
+         s++, dest--, src++ ) {
         *dest = *src;         
     }
     
     m_data = m_buffer;
-    m_dataLen = sizeof( m_buffer );
 }
 
 template < typename T >
