@@ -35,7 +35,7 @@ limitations under the License.
     The message data content is accessed via the inherited m_data 
     and m_dataLen members 
 */
-class XBeeApiRxFrame : public XBeeApiFrame, public XBeeApiFrameDecoder
+class XBeeApiRxFrame : public XBeeApiFrame
 {
     protected:
         /** The source address of the packet */
@@ -53,26 +53,27 @@ class XBeeApiRxFrame : public XBeeApiFrame, public XBeeApiFrameDecoder
         
         /** Indicate whether or not the message was PAN broadcase */
         bool m_panBroadcast;
-    
-        /** Called by XBeeDevice in order to offer frame data to the object for
-            decoding
-           
-            \param p_data Pointer to the content of the received data
-            \param p_len Length of the data pointed to by p_data
-        */
-        virtual bool decodeCallback( const uint8_t* const p_data, size_t p_len );
+   
+	/* TODO: doc */
+       	bool m_dataIsMallocd;	
 
+	/* TODO: doc */
+       	uint8_t* m_mallocdData;	
     public:
         /** Constructor */
-        XBeeApiRxFrame( XBeeDevice* p_device = NULL );
+        XBeeApiRxFrame();
+        
+	/** Constructor */
+        XBeeApiRxFrame( XBeeApiIdentifier_e p_id,
+                        const uint8_t* const p_data,
+                        const size_t         p_dataLen );
+
+	/** Deep copy */
+	/* TODO: doc */
+        bool deepCopyFrom( const XBeeApiRxFrame& p_frame );
+       
         /** Destructor */
         virtual ~XBeeApiRxFrame( void ); 
-
-        /* Callback which is invoked when a frame is successfully decoded.  The
-           contents of the frame decode can be inspected via the class member
-           variables */       
-        virtual void frameRxCallback( void );
-    
 };
 
 #endif

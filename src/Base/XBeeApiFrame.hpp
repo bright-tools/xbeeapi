@@ -97,8 +97,8 @@ class XBeeApiFrame
     
         /** Constructor */
         XBeeApiFrame( XBeeApiIdentifier_e p_id,
-                      const uint8_t* p_data,
-                      const size_t   p_dataLen );
+                      const uint8_t* const p_data,
+                      const size_t         p_dataLen );
 
         /** Return the length of the API-specific structure represented by this frame.  i.e. the API frame without the overhead - see XBEE_API_FRAME_OVERHEAD */
         virtual uint16_t getCmdLen( void ) const;
@@ -125,7 +125,7 @@ class XBeeApiFrame
                                 byte that is required.
             \param[out] p_buff  Pointer to a pointer to receive the buffer pointer 
             \param[out] p_len   Pointer to receive the length of the data pointed to by *p_buff */
-        virtual void getDataPtr( const uint16_t p_start, const uint8_t**  p_buff, uint16_t* const p_len );
+        virtual void getDataPtr( const uint16_t p_start, const uint8_t**  p_buff, uint16_t* const p_len ) const;
 };
 
 /** Class which acts as a receiver for data from the XBee and takes care of decoding it.
@@ -169,7 +169,9 @@ class XBeeApiFrameDecoder
                   the data was intended for and was decoded by this class.  Returning true in other cases may result in
                   other decoders being denied the opportunity to examine the data
             
-            \param p_data Pointer to the first byte of the data buffer (i.e. XBEE_CMD_POSN_SDELIM)
+            \param p_data Pointer to the first byte of the data buffer (i.e. XBEE_CMD_POSN_SDELIM).  The implementation
+                          of any over-riding function should not expect that the data referenced by this pointer will
+                          remain valid after the call-back has completed.
             \param p_len  Size of the data pointed to by p_data
             \returns true in the case that the data was examined and decoded successfully
                      false in the case that the data was not of interest or was not decoded successfully

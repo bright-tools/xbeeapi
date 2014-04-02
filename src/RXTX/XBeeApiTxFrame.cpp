@@ -101,6 +101,7 @@ bool XBeeApiTxFrame::setDataPtr( const uint8_t* const p_buff, const uint16_t p_l
     {
         m_data = p_buff;
         m_dataLen = p_len;
+	ret_val = true;
     }
     return ret_val;
 }

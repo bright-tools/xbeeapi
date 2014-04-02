@@ -92,7 +92,7 @@ class XBeeApiTxFrame : public XBeeApiFrame, public XBeeApiFrameDecoder
        virtual uint8_t getFrameId( void ) const;
        
        /** Callback function which is invoked when a response to the TX request is received from
-           the XBee.  This method 
+           the XBee.
            
            \param p_status Status of the TX attempt */
        virtual void frameTxCallback( const XBeeApiTxStatus_e p_status );

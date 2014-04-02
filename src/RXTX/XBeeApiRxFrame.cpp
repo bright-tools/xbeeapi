@@ -18,65 +18,46 @@ limitations under the License.
 
 #include "XBeeApiRxFrame.hpp"
 
-XBeeApiRxFrame::XBeeApiRxFrame( XBeeDevice* p_device ) : XBeeApiFrame(), XBeeApiFrameDecoder( p_device )
+XBeeApiRxFrame::XBeeApiRxFrame( void ) : XBeeApiFrame(),
+					 m_dataIsMallocd ( false )
+{
+}
+
+	/** Constructor */
+XBeeApiRxFrame::XBeeApiRxFrame( XBeeApiIdentifier_e p_id,
+                                const uint8_t* const p_data,
+                                const size_t         p_dataLen ) : XBeeApiFrame( p_id, p_data, p_dataLen ),
+							           m_dataIsMallocd ( false )
 {
 }
 
 XBeeApiRxFrame::~XBeeApiRxFrame( void )
 {
-}
-
-bool XBeeApiRxFrame::decodeCallback( const uint8_t* const p_data, size_t p_len )
-{
-    bool ret_val = false;
- 
-    /* TODO: Length check */
- 
-    if(( XBEE_CMD_RX_64B_ADDR == p_data[ XBEE_CMD_POSN_API_ID ] ) ||
-       ( XBEE_CMD_RX_16B_ADDR == p_data[ XBEE_CMD_POSN_API_ID ] ))
+    if( m_dataIsMallocd )
     {
-        size_t pos = XBEE_CMD_POSN_ID_SPECIFIC_DATA;
-
-        /* Depending on the frame type, decode either a 64- or 16-bit address */
-        if( XBEE_CMD_RX_64B_ADDR == p_data[ XBEE_CMD_POSN_API_ID ] ) 
-        {
-            m_addr = (((uint64_t)p_data[ pos ]) << 54U ) | 
-                     (((uint64_t)p_data[ pos+1 ]) << 48U ) |
-                     (((uint64_t)p_data[ pos+2 ]) << 40U ) |
-                     (((uint64_t)p_data[ pos+3 ]) << 32U ) |
-                     (((uint64_t)p_data[ pos+4 ]) << 24U ) |
-                     (((uint64_t)p_data[ pos+5 ]) << 16U ) |
-                     (((uint64_t)p_data[ pos+6 ]) << 8U ) |
-                                 p_data[ pos+7 ];
-            pos += sizeof( uint64_t );
-            m_addrIs16bit = false;
-        }
-        else
-        {
-            m_addr = (((uint16_t)p_data[ pos ]) << 8U ) | 
-                                 p_data[ pos+1 ];
-            pos += sizeof( uint16_t );
-            m_addrIs16bit = true;
-        }
-        
-        m_rssi += p_data[ pos++ ];
-        
-        m_addressBroadcast = p_data[ pos ] & 2U;
-        m_panBroadcast = p_data[ pos ] & 4U;
-        pos++;
-        
-        m_data = &( p_data[ pos ] );
-        /* -1 to account for the checksum */
-        m_dataLen = p_len - pos - 1;
-        
-        frameRxCallback();
-        
-        ret_val = true;
+        free( m_mallocdData );
     }
-    
-    return ret_val;
 }
-
-void XBeeApiRxFrame::frameRxCallback( void )
+        
+bool XBeeApiRxFrame::deepCopyFrom( const XBeeApiRxFrame& p_frame )
 {
+    /* TODO: need to catch assignment operator and free data if data is already malloc'd */
+    if( m_dataIsMallocd )
+    {
+        free( m_mallocdData );
+	m_dataIsMallocd = false;
+    }
+    *this = p_frame;
+    m_mallocdData = (uint8_t*)malloc( p_frame.m_dataLen );
+    if( m_mallocdData )
+    {
+    	m_dataIsMallocd = true;
+        memcpy( m_mallocdData, p_frame.m_data, m_dataLen );
+	m_data = m_mallocdData;
+    }
+    else
+    {
+        m_data = NULL;
+    }
+    return( m_mallocdData != NULL );
 }

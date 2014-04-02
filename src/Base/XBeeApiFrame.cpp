@@ -26,8 +26,8 @@ XBeeApiFrame::XBeeApiFrame( void ) : m_apiId ( XBEE_CMD_INVALID ), m_data( NULL 
 }
 
 XBeeApiFrame::XBeeApiFrame( XBeeApiIdentifier_e p_id,
-                            const uint8_t* p_data,
-                            const size_t   p_dataLen ) : m_apiId( p_id ), m_data( p_data ), m_dataLen( p_dataLen )
+                            const uint8_t* const p_data,
+                            const size_t         p_dataLen ) : m_apiId( p_id ), m_data( p_data ), m_dataLen( p_dataLen )
 {
 }
 
@@ -36,13 +36,12 @@ uint16_t XBeeApiFrame::getCmdLen( void ) const
     return m_dataLen + m_cmdHeaderLen;    
 }
 
-
 XBeeApiIdentifier_e XBeeApiFrame::getApiId( void ) const
 {
     return m_apiId;
 }
         
-void XBeeApiFrame::getDataPtr( const uint16_t p_start, const uint8_t**  p_buff, uint16_t* const p_len )
+void XBeeApiFrame::getDataPtr( const uint16_t p_start, const uint8_t**  p_buff, uint16_t* const p_len ) const
 {
     *p_len = m_dataLen;
     (*p_buff) = m_data;
